@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+
+# 가상환경
+venv/
+.venv/
+env/
+
+# 런타임 로그 (실행 시 재생성)
+logs/
+
+# MLflow 파일 아티팩트 스토어 (sqlite 백엔드 사용 — train.py 실행 시 재생성)
+mlruns/
+
+# OS / 에디터
+.DS_Store
+Thumbs.db
+
+# Claude 작업 디렉터리
+.claude/
+
+# 보고서 렌더링 임시 이미지
+data/_report_*.png
