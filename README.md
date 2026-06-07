@@ -38,6 +38,7 @@ python src/train.py
 python -m unittest discover -s tests -v
 
 # 6. Docker 이미지 빌드 및 추론 실행
+# ※ models/best_model.pkl이 저장소에 포함돼 있어 train.py 없이도 바로 빌드 가능
 docker build -t cardiocare:1.0 .
 docker run --rm cardiocare:1.0
 
@@ -68,10 +69,14 @@ mlflow ui --backend-store-uri sqlite:///mlflow.db
 ├── tests/
 │   └── test_pipeline.py          # unittest 4개
 ├── models/
-│   └── best_model.pkl            # 최종 모델 (train.py 실행 후 생성)
+│   └── best_model.pkl            # 학습된 최종 모델 (저장소에 포함 — 즉시 사용 가능)
+├── docs/
+│   ├── feature_store_and_registry.md
+│   └── serving_and_retraining_strategy.md
 ├── mlflow.db                     # MLflow SQLite 백엔드
 ├── Dockerfile
 ├── requirements.txt
+├── report.pdf                    # 6페이지 최종 보고서
 ├── .github/workflows/ci.yml
 └── README.md
 ```
@@ -88,3 +93,36 @@ mlflow ui --backend-store-uri sqlite:///mlflow.db
 | Random Forest (tuned) | 0.808 | 0.824 | 0.828 |
 
 **최종 모델: SVC** — recall 최고(0.833), False Negative 최소화
+
+---
+
+## 특성 선택 결과
+
+`SelectFromModel(RandomForestClassifier, threshold='mean')` — OHE 후 28차원 → **9개 선택**
+
+| 선택 컬럼 | 원본 특성 / 의미 | RF 중요도 |
+|-----------|----------------|:---------:|
+| chol | 혈중 콜레스테롤 (mg/dl) | 0.132 |
+| age | 나이 (세) | 0.113 |
+| thalach | 최대 심박수 (bpm) | 0.106 |
+| oldpeak | 운동 ST 하강 (mm) | 0.086 |
+| cp_4.0 | 흉통 유형 — 무증상 | 0.082 |
+| trestbps | 안정 시 혈압 (mmHg) | 0.073 |
+| exang_0.0 | 운동유발 협심증 없음 | 0.062 |
+| exang_1.0 | 운동유발 협심증 있음 | 0.054 |
+| cp_2.0 | 흉통 유형 — 비전형 협심증 | 0.041 |
+| (나머지 19개) | sex·fbs·restecg·ca·thal·slope 등 | < 0.036 → 탈락 |
+
+5개 연속형(chol·age·thalach·oldpeak·trestbps) 전부와 흉통 유형·운동유발 협심증이 선택됨.
+EDA에서 타깃 분리가 컸던 변수들과 일치하며, 임상 의미가 있는 특성만 남음.
+
+---
+
+## 서빙 및 재학습 전략 요약
+
+자세한 내용: [`docs/serving_and_retraining_strategy.md`](docs/serving_and_retraining_strategy.md)
+
+- **서빙**: Model-as-a-Service (MaaS) — 병원 EMR → 중앙 추론 API → 위험 점수 반환
+- **재학습 트리거**: KS p < 0.05 지속 또는 balanced accuracy 임계치 이하 → 재학습 트리거
+- **정기 재학습**: 트리거 외 분기별 최신 데이터로 점진적 드리프트 대응
+- **Human-in-the-loop**: 경계 확률(0.4–0.6) 구간 의사 검토 라우팅, 재학습 모델은 recall 게이팅 후 담당자 승인 필요

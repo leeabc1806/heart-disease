@@ -161,8 +161,26 @@ def build():
     s.append(P(
         "데이터를 80/20으로 분할(시드 42, stratify)한 뒤, RandomForest 기반 "
         "<font name='MalgunBold'>SelectFromModel</font>(threshold='mean')로 특성을 선택했다. "
-        "채택된 9개 특성: <b>age, trestbps, chol, thalach, oldpeak, cp_2, cp_4, exang_0, exang_1</b>. "
-        "이는 EDA에서 타깃과의 차이가 컸던 변수들과 일치한다.", BODY))
+        "OHE 변환 후 28차원 중 <b>중요도 평균(0.036) 이상인 9개</b>가 선택됐다(표 1). "
+        "5개 연속형(chol·age·thalach·oldpeak·trestbps) 전부와 흉통 유형(cp_4·cp_2)·"
+        "운동유발 협심증(exang)이 포함됐으며, 이는 EDA에서 타깃과의 차이가 컸던 변수들과 일치한다.", BODY))
+    feat_tbl = [
+        ["선택 컬럼", "원본 특성 / 의미", "RF 중요도"],
+        ["chol", "혈중 콜레스테롤 (mg/dl)", "0.132"],
+        ["age", "나이 (세)", "0.113"],
+        ["thalach", "최대 심박수 (bpm)", "0.106"],
+        ["oldpeak", "운동 ST 하강 (mm)", "0.086"],
+        ["cp_4.0", "흉통 유형 — 무증상", "0.082"],
+        ["trestbps", "안정 시 혈압 (mmHg)", "0.073"],
+        ["exang_0.0", "운동유발 협심증 없음", "0.062"],
+        ["exang_1.0", "운동유발 협심증 있음", "0.054"],
+        ["cp_2.0", "흉통 유형 — 비전형 협심증", "0.041"],
+        ["(나머지 19개)", "sex·fbs·restecg·ca·thal·slope 등", "< 0.036 → 탈락"],
+    ]
+    s.append(make_table(feat_tbl, [3.5 * cm, 8.0 * cm, 3.5 * cm]))
+    s.append(P(
+        "표 1. RandomForest SelectFromModel 특성 선택 결과 — "
+        "중요도 평균(threshold='mean', 0.036) 이상인 9개 선택, 나머지 19개 탈락.", CAPTION))
     s.append(P(
         "Logistic Regression·SVC·Random Forest 3개 계열을 학습하고, 모든 실행을 "
         "<b>MLflow</b>(SQLite 백엔드)에 파라미터·지표·모델 아티팩트·계열 태그와 함께 기록했다. "
@@ -178,7 +196,7 @@ def build():
     t = make_table(model_tbl, [4.3 * cm, 2.1 * cm, 2.1 * cm, 2.1 * cm, 1.8 * cm, 1.9 * cm])
     t.setStyle(TableStyle([("BACKGROUND", (0, 2), (-1, 2), colors.HexColor("#fff3cd"))]))
     s.append(t)
-    s.append(P("표 1. 테스트셋 모델 성능 비교 (MLflow 기록). 강조 행이 최종 선택 모델.", CAPTION))
+    s.append(P("표 2. 테스트셋 모델 성능 비교 (MLflow 기록). 강조 행이 최종 선택 모델.", CAPTION))
     s.append(P(
         "최종 선택의 핵심 근거는 <b>혼동행렬의 False Negative</b>다. 아래 표는 4개 모델의 "
         "테스트셋(184건) 혼동행렬을 분해한 것이다.", BODY))
@@ -196,7 +214,7 @@ def build():
         ("TEXTCOLOR", (3, 0), (3, 0), colors.white),
     ]))
     s.append(t)
-    s.append(P("표 2. 모델별 혼동행렬 분해 — FN(심장병 미탐지) 열 강조. SVC가 FN=17로 최소.", CAPTION))
+    s.append(P("표 3. 모델별 혼동행렬 분해 — FN(심장병 미탐지) 열 강조. SVC가 FN=17로 최소.", CAPTION))
     s.append(P(
         "<b>최종 모델: SVC.</b> 임상적으로 가장 중요한 recall(0.833)이 최고이며, balanced "
         "accuracy(0.825)·F1(0.842)·CV 평균(0.797)도 가장 우수하다. 무엇보다 <b>False "
@@ -247,7 +265,7 @@ def build():
     t = make_table(ks_tbl, [3.2 * cm, 3.0 * cm, 3.5 * cm, 5.3 * cm])
     t.setStyle(TableStyle([("BACKGROUND", (0, 3), (-1, 3), colors.HexColor("#f8d7da"))]))
     s.append(t)
-    s.append(P("표 3. KS 검정 결과 — 드리프트를 주입한 chol만 정확히 플래그됨.", CAPTION))
+    s.append(P("표 4. KS 검정 결과 — 드리프트를 주입한 chol만 정확히 플래그됨.", CAPTION))
     s.append(P(
         "검정은 드리프트를 주입한 chol만 정확히 탐지했고(p=6.6e-11), 손대지 않은 특성은 모두 "
         "p≥0.05로 플래그되지 않아 <b>오탐 없이 작동</b>함을 확인했다. 입력 드리프트는 성능 저하로 "
