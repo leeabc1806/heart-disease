@@ -1,0 +1,91 @@
+{
+  "split": {
+    "train": 0.6,
+    "validation": 0.2,
+    "test": 0.2
+  },
+  "selection_metric": "validation_recall",
+  "selected_model": "LogisticRegression",
+  "selected_features": [
+    "age",
+    "trestbps",
+    "chol",
+    "thalach",
+    "oldpeak",
+    "cp_2.0",
+    "cp_4.0",
+    "exang_0.0",
+    "exang_1.0"
+  ],
+  "selected_feature_importances": {
+    "age": 0.13607549774777636,
+    "trestbps": 0.07372706111062133,
+    "chol": 0.09600119419023787,
+    "thalach": 0.11656127954385785,
+    "oldpeak": 0.08005987271917021,
+    "cp_2.0": 0.040082330437601094,
+    "cp_4.0": 0.07892808021596737,
+    "exang_0.0": 0.05948760585160171,
+    "exang_1.0": 0.05661035487688426
+  },
+  "candidate_validation_metrics": {
+    "LogisticRegression": {
+      "balanced_accuracy": 0.8008130081300813,
+      "precision": 0.8173076923076923,
+      "recall": 0.8333333333333334,
+      "f1": 0.8252427184466019,
+      "cv_balanced_accuracy_mean": 0.7706945466711275,
+      "cv_balanced_accuracy_std": 0.036644049825356496
+    },
+    "SVC": {
+      "balanced_accuracy": 0.7727164036346246,
+      "precision": 0.7904761904761904,
+      "recall": 0.8137254901960784,
+      "f1": 0.8019323671497585,
+      "cv_balanced_accuracy_mean": 0.7539176982268317,
+      "cv_balanced_accuracy_std": 0.04743629093336141
+    },
+    "RandomForest": {
+      "balanced_accuracy": 0.7776183644189383,
+      "precision": 0.7924528301886793,
+      "recall": 0.8235294117647058,
+      "f1": 0.8076923076923077,
+      "cv_balanced_accuracy_mean": 0.7754078287052526,
+      "cv_balanced_accuracy_std": 0.04880866034137898
+    },
+    "RandomForest_tuned": {
+      "balanced_accuracy": 0.7776183644189383,
+      "precision": 0.7924528301886793,
+      "recall": 0.8235294117647058,
+      "f1": 0.8076923076923077,
+      "cv_balanced_accuracy_mean": 0.7897269989963198,
+      "cv_balanced_accuracy_std": 0.05184341689619735
+    }
+  },
+  "final_test_metrics": {
+    "balanced_accuracy": 0.7800095648015304,
+    "precision": 0.803921568627451,
+    "recall": 0.803921568627451,
+    "f1": 0.803921568627451
+  },
+  "final_test_confusion_matrix": [
+    [
+      62,
+      20
+    ],
+    [
+      20,
+      82
+    ]
+  ],
+  "leave_one_site_out": {
+    "balanced_accuracy_scores": [
+      0.7667792595192139,
+      0.7957647531112003,
+      0.6712725358599816,
+      0.6777173913043478
+    ],
+    "balanced_accuracy_mean": 0.7278834849486859,
+    "balanced_accuracy_std": 0.054410900459027724
+  }
+}

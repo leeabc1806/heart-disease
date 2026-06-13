@@ -6,6 +6,7 @@ Heart Disease 데이터 로더
 타깃: num=0 → 0(정상), num>=1 → 1(심장병)
 """
 import os
+import numpy as np
 import pandas as pd
 
 COLUMNS = [
@@ -20,6 +21,10 @@ SOURCES = {
     "va":         "processed.va.data",
 }
 
+# UCI 원본에서 0은 실제 측정값이 아니라 미측정을 뜻하는 경우가 있다.
+# 이 세 항목은 생리적으로 0이 될 수 없으므로 결측치로 정규화한다.
+ZERO_AS_MISSING = ["trestbps", "chol", "thalach"]
+
 
 def load_raw(data_dir: str = None) -> pd.DataFrame:
     """4개 데이터셋을 합쳐 원본 DataFrame 반환 (결측=NaN, 타깃 미이진화)."""
@@ -30,6 +35,8 @@ def load_raw(data_dir: str = None) -> pd.DataFrame:
     for source, filename in SOURCES.items():
         path = os.path.join(data_dir, filename)
         df = pd.read_csv(path, header=None, names=COLUMNS, na_values="?")
+        df[COLUMNS] = df[COLUMNS].apply(pd.to_numeric, errors="coerce")
+        df[ZERO_AS_MISSING] = df[ZERO_AS_MISSING].replace(0, np.nan)
         df["source"] = source
         frames.append(df)
 
@@ -39,6 +46,7 @@ def load_raw(data_dir: str = None) -> pd.DataFrame:
 def load_data(data_dir: str = None) -> pd.DataFrame:
     """타깃 이진화까지 완료한 DataFrame 반환 (num: 0→0, 1-4→1)."""
     df = load_raw(data_dir)
+    df = df.dropna(subset=["num"]).copy()
     df["target"] = (df["num"] > 0).astype(int)
     df = df.drop(columns=["num"])
     return df
