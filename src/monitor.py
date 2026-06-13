@@ -10,6 +10,7 @@
 import logging
 import os
 import pickle
+import json
 import sys
 from datetime import datetime, timedelta
 
@@ -226,6 +227,19 @@ def main():
     print("=" * 70)
     ts_df = plot_drift_timeseries(pipeline, X_test, y_test, X_train["chol"], feature="chol")
     print(ts_df.to_string(index=False))
+
+    summary_path = os.path.join(DATA_DIR, "monitoring_summary.json")
+    with open(summary_path, "w", encoding="utf-8") as f:
+        json.dump({
+            "model_name": model_name,
+            "model_version": version,
+            "drift": shifts,
+            "ks_results": ks_df.to_dict(orient="records"),
+            "original_balanced_accuracy": ba_orig,
+            "drifted_balanced_accuracy": ba_drift,
+            "timeseries": ts_df.to_dict(orient="records"),
+        }, f, ensure_ascii=False, indent=2)
+    logger.info("모니터링 요약 저장: %s", summary_path)
 
     print("\n로그 파일: logs/monitor.log")
 

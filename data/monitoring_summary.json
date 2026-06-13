@@ -1,0 +1,118 @@
+{
+  "model_name": "LogisticRegression",
+  "model_version": "1.0",
+  "drift": {
+    "chol": [
+      30.0,
+      1.5
+    ]
+  },
+  "ks_results": [
+    {
+      "feature": "age",
+      "ks_stat": 0.0408,
+      "p_value": 0.9626596216602037,
+      "drift_flagged": false
+    },
+    {
+      "feature": "trestbps",
+      "ks_stat": 0.0405,
+      "p_value": 0.9681787194797424,
+      "drift_flagged": false
+    },
+    {
+      "feature": "chol",
+      "ks_stat": 0.2489,
+      "p_value": 1.1414611598282172e-06,
+      "drift_flagged": true
+    },
+    {
+      "feature": "thalach",
+      "ks_stat": 0.0578,
+      "p_value": 0.7101416554679251,
+      "drift_flagged": false
+    },
+    {
+      "feature": "oldpeak",
+      "ks_stat": 0.0411,
+      "p_value": 0.9638674572425142,
+      "drift_flagged": false
+    }
+  ],
+  "original_balanced_accuracy": 0.7800095648015304,
+  "drifted_balanced_accuracy": 0.7800095648015304,
+  "timeseries": [
+    {
+      "day": 0,
+      "feature_mean": 247.82,
+      "ks_p_value": 0.5564676266435356,
+      "balanced_accuracy": 0.78
+    },
+    {
+      "day": 1,
+      "feature_mean": 255.82,
+      "ks_p_value": 0.0469191226237014,
+      "balanced_accuracy": 0.78
+    },
+    {
+      "day": 2,
+      "feature_mean": 263.82,
+      "ks_p_value": 0.00022937514770456077,
+      "balanced_accuracy": 0.78
+    },
+    {
+      "day": 3,
+      "feature_mean": 271.82,
+      "ks_p_value": 7.198730236211131e-07,
+      "balanced_accuracy": 0.78
+    },
+    {
+      "day": 4,
+      "feature_mean": 279.82,
+      "ks_p_value": 1.2149129778801198e-11,
+      "balanced_accuracy": 0.7739
+    },
+    {
+      "day": 5,
+      "feature_mean": 287.82,
+      "ks_p_value": 1.1030936309289268e-15,
+      "balanced_accuracy": 0.7739
+    },
+    {
+      "day": 6,
+      "feature_mean": 295.82,
+      "ks_p_value": 4.7974912264251664e-21,
+      "balanced_accuracy": 0.7788
+    },
+    {
+      "day": 7,
+      "feature_mean": 303.82,
+      "ks_p_value": 9.194098170570598e-27,
+      "balanced_accuracy": 0.7788
+    },
+    {
+      "day": 8,
+      "feature_mean": 311.82,
+      "ks_p_value": 4.989957794237953e-32,
+      "balanced_accuracy": 0.7788
+    },
+    {
+      "day": 9,
+      "feature_mean": 319.82,
+      "ks_p_value": 1.2998906649830973e-38,
+      "balanced_accuracy": 0.7837
+    },
+    {
+      "day": 10,
+      "feature_mean": 327.82,
+      "ks_p_value": 1.0706744779341409e-45,
+      "balanced_accuracy": 0.7837
+    },
+    {
+      "day": 11,
+      "feature_mean": 335.82,
+      "ks_p_value": 2.9017910025366956e-52,
+      "balanced_accuracy": 0.7837
+    }
+  ]
+}

@@ -16,7 +16,7 @@ from datetime import datetime
 import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from preprocessing import NUMERIC_FEATURES, CATEGORICAL_FEATURES
+from preprocessing import CATEGORICAL_FEATURES, NUMERIC_FEATURES, validate_input
 
 # ── 로깅 설정 (파일 + 콘솔) ─────────────────────────────────────────────────
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -45,21 +45,25 @@ def load_model(model_path: str = MODEL_PATH) -> dict:
         return pickle.load(f)
 
 
-def predict(input_path: str, output_path: str = None) -> pd.DataFrame:
+def predict(
+    input_path: str,
+    output_path: str = None,
+    model_path: str = MODEL_PATH,
+) -> pd.DataFrame:
     """CSV를 읽어 예측 수행, 로그 기록 후 결과 DataFrame 반환."""
-    model_data = load_model()
+    model_data = load_model(model_path)
     pipeline   = model_data["pipeline"]
     model_name = model_data.get("model_name", "unknown")
     version    = model_data.get("version", "1.0")
 
     df = pd.read_csv(input_path)
 
-    # 필요한 컬럼 없으면 오류 출력
-    missing_cols = [c for c in FEATURE_COLS if c not in df.columns]
-    if missing_cols:
-        raise ValueError(f"입력 CSV에 컬럼 누락: {missing_cols}")
+    validation_errors = validate_input(df)
+    if validation_errors:
+        raise ValueError("입력 검증 실패: " + "; ".join(validation_errors))
 
-    X = df[FEATURE_COLS]
+    # 검증에 사용한 숫자 변환을 실제 모델 입력에도 동일하게 적용한다.
+    X = df[FEATURE_COLS].apply(pd.to_numeric, errors="coerce")
 
     logger.info(
         "추론 시작 | timestamp=%s | model=%s | version=%s | input_shape=%s",

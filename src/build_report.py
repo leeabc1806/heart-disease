@@ -4,6 +4,7 @@ EDA/학습/드리프트 결과와 그림을 결합해 8개 섹션 + AI 사용 �
 
 실행: python src/build_report.py  →  report.pdf
 """
+import json
 import os
 
 from reportlab.lib import colors
@@ -26,6 +27,8 @@ from reportlab.platypus import (
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 OUT_PATH = os.path.join(PROJECT_ROOT, "report.pdf")
+SUMMARY_PATH = os.path.join(DATA_DIR, "training_summary.json")
+MONITORING_SUMMARY_PATH = os.path.join(DATA_DIR, "monitoring_summary.json")
 
 # ── 한글 폰트 등록 ──────────────────────────────────────────────────────────────
 pdfmetrics.registerFont(TTFont("Malgun", "C:/Windows/Fonts/malgun.ttf"))
@@ -85,6 +88,17 @@ def make_table(data, col_widths, header_bg="#1a3e6e", body_font="Malgun"):
 
 
 def build():
+    with open(SUMMARY_PATH, encoding="utf-8") as f:
+        summary = json.load(f)
+    with open(MONITORING_SUMMARY_PATH, encoding="utf-8") as f:
+        monitoring = json.load(f)
+
+    selected_model = summary["selected_model"]
+    candidate_metrics = summary["candidate_validation_metrics"]
+    test_metrics = summary["final_test_metrics"]
+    site_cv = summary["leave_one_site_out"]
+    (tn, fp), (fn, tp) = summary["final_test_confusion_matrix"]
+
     doc = SimpleDocTemplate(
         OUT_PATH, pagesize=A4,
         leftMargin=2 * cm, rightMargin=2 * cm,
@@ -130,7 +144,7 @@ def build():
         "결측값은 기관별로 패턴이 뚜렷하다. <b>slope·ca·thal</b>은 Switzerland/VA에서 결측 비율이 "
         "50~90%에 달하며, Switzerland의 <b>chol</b>은 다수가 0(측정 누락)으로 기록돼 있다. "
         "연속형 특성 boxplot에서는 chol과 trestbps에 이상치가 관찰된다.", BODY))
-    s += fig("fig_boxplots.png", 14.5, "그림 2. 연속형 특성 Boxplot — chol·trestbps의 이상치 및 chol=0 기록 누락 확인")
+    s += fig("fig_boxplots.png", 14.5, "그림 2. 0 sentinel 정규화 후 연속형 특성 Boxplot")
 
     # ── 3. 전처리 결정 ──
     s.append(P("3. EDA 결과에 근거한 전처리 결정", H1))
@@ -140,6 +154,7 @@ def build():
         "구성했다. 모든 변환기는 학습 fold에만 fit한다.", BODY))
     pre_tbl = [
         ["항목", "결정", "근거"],
+        ["0 sentinel", "NaN 변환", "trestbps·chol·thalach의 생리적으로 불가능한 0 처리"],
         ["연속형 결측", "중앙값 대치", "이상치·왜도에 강건"],
         ["범주형 결측", "최빈값 대치", "가장 흔한 임상 상태로 보수적 대치"],
         ["스케일링", "StandardScaler", "LR·SVC에 필요, 학습 fold에만 fit (누수 방지)"],
@@ -149,8 +164,8 @@ def build():
     s.append(make_table(pre_tbl, [3.2 * cm, 3.5 * cm, 8.3 * cm]))
     s.append(Spacer(1, 4 * mm))
     s.append(P(
-        "<b>핵심: 데이터 누수 방지.</b> 스케일러·임퓨터·특성 선택기는 train/test 분할 "
-        "이후 학습 데이터에만 fit하고, 테스트·추론 데이터에는 transform만 적용한다. "
+        "<b>핵심: 데이터 누수 방지.</b> 스케일러·임퓨터·특성 선택기는 train/validation/test 분할 "
+        "이후 학습 데이터에만 fit하고, validation·test·추론 데이터에는 transform만 적용한다. "
         "교차 검증 시에도 Pipeline 전체가 각 fold마다 새로 fit되어 검증 fold의 정보가 "
         "전처리에 새지 않는다.", BODY))
 
@@ -159,78 +174,70 @@ def build():
     # ── 4. 모델 비교 ──
     s.append(P("4. 모델링 · MLflow 실험 및 최종 선택", H1))
     s.append(P(
-        "데이터를 80/20으로 분할(시드 42, stratify)한 뒤, RandomForest 기반 "
-        "<font name='MalgunBold'>SelectFromModel</font>(threshold='mean')로 특성을 선택했다. "
-        "OHE 변환 후 28차원 중 <b>중요도 평균(0.036) 이상인 9개</b>가 선택됐다(표 1). "
-        "5개 연속형(chol·age·thalach·oldpeak·trestbps) 전부와 흉통 유형(cp_4·cp_2)·"
-        "운동유발 협심증(exang)이 포함됐으며, 이는 EDA에서 타깃과의 차이가 컸던 변수들과 일치한다.", BODY))
-    feat_tbl = [
-        ["선택 컬럼", "원본 특성 / 의미", "RF 중요도"],
-        ["chol", "혈중 콜레스테롤 (mg/dl)", "0.132"],
-        ["age", "나이 (세)", "0.113"],
-        ["thalach", "최대 심박수 (bpm)", "0.106"],
-        ["oldpeak", "운동 ST 하강 (mm)", "0.086"],
-        ["cp_4.0", "흉통 유형 — 무증상", "0.082"],
-        ["trestbps", "안정 시 혈압 (mmHg)", "0.073"],
-        ["exang_0.0", "운동유발 협심증 없음", "0.062"],
-        ["exang_1.0", "운동유발 협심증 있음", "0.054"],
-        ["cp_2.0", "흉통 유형 — 비전형 협심증", "0.041"],
-        ["(나머지 19개)", "sex·fbs·restecg·ca·thal·slope 등", "< 0.036 → 탈락"],
-    ]
-    s.append(make_table(feat_tbl, [3.5 * cm, 8.0 * cm, 3.5 * cm]))
-    s.append(P(
-        "표 1. RandomForest SelectFromModel 특성 선택 결과 — "
-        "중요도 평균(threshold='mean', 0.036) 이상인 9개 선택, 나머지 19개 탈락.", CAPTION))
+        "데이터를 train/validation/test=60/20/20으로 분할(시드 42, stratify)한 뒤, "
+        "RandomForest 기반 <font name='MalgunBold'>SelectFromModel</font>(threshold='mean')로 "
+        f"<b>{len(summary['selected_features'])}개 특성</b>을 선택했다. 모든 변환과 특성 선택은 "
+        "학습 fold 안에서만 fit된다.", BODY))
+    feat_tbl = [["선택 컬럼", "RF 중요도"]]
+    for feature, importance in sorted(
+        summary["selected_feature_importances"].items(),
+        key=lambda item: item[1],
+        reverse=True,
+    ):
+        feat_tbl.append([feature, f"{importance:.3f}"])
+    s.append(make_table(feat_tbl, [8.0 * cm, 5.0 * cm]))
+    s.append(P("표 1. RandomForest SelectFromModel 특성 선택 결과.", CAPTION))
     s.append(P(
         "Logistic Regression·SVC·Random Forest 3개 계열을 학습하고, 모든 실행을 "
         "<b>MLflow</b>(SQLite 백엔드)에 파라미터·지표·모델 아티팩트·계열 태그와 함께 기록했다. "
-        "전 모델에 5-fold 교차 검증을, 가장 유력한 RandomForest에는 RandomizedSearchCV"
-        "(n_iter=20) 하이퍼파라미터 탐색을 적용했다.", BODY))
-    model_tbl = [
-        ["모델", "Bal. Acc", "Precision", "Recall", "F1", "CV Mean"],
-        ["Logistic Regression", "0.820", "0.849", "0.824", "0.836", "0.779"],
-        ["SVC  (최종 선택)", "0.825", "0.850", "0.833", "0.842", "0.797"],
-        ["Random Forest", "0.802", "0.824", "0.824", "0.824", "0.777"],
-        ["Random Forest (tuned)", "0.808", "0.832", "0.824", "0.828", "0.789"],
-    ]
+        "전 모델에 5-fold 교차 검증을, RandomForest에는 RandomizedSearchCV(n_iter=20)를 적용했다. "
+        "후보 비교에는 validation만 사용하고 test는 최종 선택 후 한 번만 평가했다.", BODY))
+    model_tbl = [["모델", "Val Bal. Acc", "Precision", "Recall", "F1", "CV Mean"]]
+    for name, metrics in candidate_metrics.items():
+        label = f"{name} (선택)" if name == selected_model else name
+        model_tbl.append([
+            label,
+            f"{metrics['balanced_accuracy']:.3f}",
+            f"{metrics['precision']:.3f}",
+            f"{metrics['recall']:.3f}",
+            f"{metrics['f1']:.3f}",
+            f"{metrics['cv_balanced_accuracy_mean']:.3f}",
+        ])
     t = make_table(model_tbl, [4.3 * cm, 2.1 * cm, 2.1 * cm, 2.1 * cm, 1.8 * cm, 1.9 * cm])
-    t.setStyle(TableStyle([("BACKGROUND", (0, 2), (-1, 2), colors.HexColor("#fff3cd"))]))
+    selected_row = list(candidate_metrics).index(selected_model) + 1
+    t.setStyle(TableStyle([("BACKGROUND", (0, selected_row), (-1, selected_row), colors.HexColor("#fff3cd"))]))
     s.append(t)
-    s.append(P("표 2. 테스트셋 모델 성능 비교 (MLflow 기록). 강조 행이 최종 선택 모델.", CAPTION))
+    s.append(P("표 2. Validation 성능 비교 (MLflow 기록). 강조 행이 최종 선택 모델.", CAPTION))
     s.append(P(
-        "최종 선택의 핵심 근거는 <b>혼동행렬의 False Negative</b>다. 아래 표는 4개 모델의 "
-        "테스트셋(184건) 혼동행렬을 분해한 것이다.", BODY))
+        "최종 선택 후 train+validation 데이터로 다시 학습하고, 보지 않은 테스트셋 184건을 한 번 평가했다.", BODY))
     cm_tbl = [
         ["모델", "TN", "FP", "FN ↓", "TP"],
-        ["Logistic Regression", "67", "15", "18", "84"],
-        ["SVC  (최종 선택)", "67", "15", "17", "85"],
-        ["Random Forest", "64", "18", "18", "84"],
-        ["Random Forest (tuned)", "65", "17", "18", "84"],
+        [selected_model, str(tn), str(fp), str(fn), str(tp)],
     ]
     t = make_table(cm_tbl, [4.3 * cm, 2.2 * cm, 2.2 * cm, 2.4 * cm, 2.2 * cm])
-    t.setStyle(TableStyle([
-        ("BACKGROUND", (0, 2), (-1, 2), colors.HexColor("#fff3cd")),
-        ("BACKGROUND", (3, 0), (3, -1), colors.HexColor("#f8d7da")),
-        ("TEXTCOLOR", (3, 0), (3, 0), colors.white),
-    ]))
     s.append(t)
-    s.append(P("표 3. 모델별 혼동행렬 분해 — FN(심장병 미탐지) 열 강조. SVC가 FN=17로 최소.", CAPTION))
+    s.append(P("표 3. 독립 테스트셋의 최종 혼동행렬.", CAPTION))
     s.append(P(
-        "<b>최종 모델: SVC.</b> 임상적으로 가장 중요한 recall(0.833)이 최고이며, balanced "
-        "accuracy(0.825)·F1(0.842)·CV 평균(0.797)도 가장 우수하다. 무엇보다 <b>False "
-        "Negative가 17건으로 4개 모델 중 가장 적다</b> — 심장병 환자를 놓치는 빈도가 가장 낮다는 뜻이다. "
-        "심장병 미탐지가 치명적인 본 문제에서 FN 최소화는 결정적 선택 기준이며, precision(0.850)도 "
-        "충분히 높아 과도한 오경보 없이 균형을 유지한다.", BODY))
+        f"<b>최종 모델: {selected_model}.</b> 독립 테스트셋에서 balanced accuracy "
+        f"{test_metrics['balanced_accuracy']:.3f}, precision {test_metrics['precision']:.3f}, "
+        f"recall {test_metrics['recall']:.3f}, F1 {test_metrics['f1']:.3f}를 기록했다. "
+        "테스트 결과를 모델 선택에 사용하지 않았으므로 이 수치를 최종 일반화 성능 추정치로 해석한다. "
+        f"기관 하나를 통째로 제외하는 leave-one-site-out 검증의 balanced accuracy는 "
+        f"{site_cv['balanced_accuracy_mean']:.3f}±{site_cv['balanced_accuracy_std']:.3f}로, "
+        "새 기관 일반화의 불확실성을 별도로 보고한다.", BODY))
 
     # ── 5. 테스트 · 패키징 ──
     s.append(P("5. 테스트와 패키징 — 무엇을, 왜", H1))
-    s.append(P("<b>단위 테스트 (unittest 4개)</b> — 사소하지 않은 실제 버그를 잡도록 설계:", BODY))
+    s.append(P("<b>단위 테스트 (unittest 7개)</b> — 실제 데이터·추론 결함을 잡도록 설계:", BODY))
     test_tbl = [
         ["테스트", "검증 내용 / 잡아내는 버그"],
         ["1. 예측 shape", "predict() 행 수 = 입력 행 수. 배치 처리 시 행 누락/중복 탐지"],
-        ["2. 확률 범위·합", "predict_proba ∈ [0,1], 행합 ≈ 1. 보정·인코딩 깨짐 탐지"],
-        ["3. 입력 범위 검증", "chol∈[0,600] 등 임상 범위 초과 입력 차단 (잘못된 단위/오타)"],
+        ["2. 확률 범위·합", "predict_proba ∈ [0,1], 행합은 약 1. 보정·인코딩 깨짐 탐지"],
+        ["3. 입력 범위 검증", "chol∈[1,600] 등 임상 범위 초과 입력 차단 (잘못된 단위/오타)"],
         ["4. 결정론", "고정 시드에서 동일 입력 → 동일 출력. 재현성·시드 누락 탐지"],
+        ["5. 결측 sentinel", "생리적으로 불가능한 0 측정값이 NaN으로 정규화되는지 검증"],
+        ["6. 추론 검증 연결", "inference.py가 범위·범주 오류를 예측 전에 실제 차단하는지 검증"],
+        ["7. 숫자 문자열 입력", "CSV 숫자 문자열이 수치형으로 정규화돼 추론되는지 검증"],
     ]
     s.append(make_table(test_tbl, [3.4 * cm, 11.6 * cm]))
     s.append(Spacer(1, 3 * mm))
@@ -239,11 +246,11 @@ def build():
         "추론 엔트리포인트를 실행한다. <font name='Malgun'>docker build -t cardiocare:1.0 .</font> 빌드 후 "
         "샘플 배치 입력으로 정상 추론된다. 비밀값은 포함하지 않는다.", BODY))
     s.append(P(
-        "<b>CI (GitHub Actions).</b> 모든 push에서 의존성 설치 후 unittest를 실행한다. "
+        "<b>CI (GitHub Actions).</b> 모든 push에서 unittest, Docker build, 샘플 컨테이너 추론을 실행한다. "
         "main 브랜치의 green 유지를 목표로 한다.", BODY))
     s.append(P(
         "<b>피처 스토어 / 모델 레지스트리.</b> 피처 스토어에는 <b>oldpeak</b>(ST 하강)를 등록한다 — "
-        "타깃 상관이 높고 특성 선택에서 항상 채택되는 안정적 피처로, ECG 장비에서 자동 갱신되므로 "
+        "현재 실험의 특성 선택에서 채택됐고 임상적 의미가 명확하며, ECG 장비에서 자동 갱신되므로 "
         "최신성 관리가 필요하다. 모델 레지스트리에는 <b>recall 값</b>을 메타데이터로 기록해, "
         "'기존 배포 모델보다 recall이 낮은 버전은 Production 승격 불가'라는 안전 게이팅을 자동화한다.", BODY))
 
@@ -254,25 +261,26 @@ def build():
     s.append(P(
         "테스트셋의 <b>chol 평균을 +30, 분산을 1.5배</b>로 인위 이동시킨 뒤, 각 연속형 특성에 대해 "
         "학습 분포와 <font name='MalgunBold'>scipy.stats.ks_2samp</font>를 수행했다.", BODY))
-    ks_tbl = [
-        ["특성", "KS 통계량", "p-value", "드리프트 플래그"],
-        ["age", "0.041", "0.96", "—"],
-        ["trestbps", "0.037", "0.99", "—"],
-        ["chol", "0.286", "6.6e-11", "플래그 (p<0.05)"],
-        ["thalach", "0.058", "0.71", "—"],
-        ["oldpeak", "0.041", "0.96", "—"],
-    ]
+    ks_tbl = [["특성", "KS 통계량", "p-value", "드리프트 플래그"]]
+    for row in monitoring["ks_results"]:
+        ks_tbl.append([
+            row["feature"],
+            f"{row['ks_stat']:.4f}",
+            f"{row['p_value']:.2e}",
+            "플래그" if row["drift_flagged"] else "—",
+        ])
     t = make_table(ks_tbl, [3.2 * cm, 3.0 * cm, 3.5 * cm, 5.3 * cm])
-    t.setStyle(TableStyle([("BACKGROUND", (0, 3), (-1, 3), colors.HexColor("#f8d7da"))]))
     s.append(t)
     s.append(P("표 4. KS 검정 결과 — 드리프트를 주입한 chol만 정확히 플래그됨.", CAPTION))
     s.append(P(
-        "검정은 드리프트를 주입한 chol만 정확히 탐지했고(p=6.6e-11), 손대지 않은 특성은 모두 "
-        "p≥0.05로 플래그되지 않아 <b>오탐 없이 작동</b>함을 확인했다. 입력 드리프트는 성능 저하로 "
-        "이어져, balanced accuracy가 <b>0.825 → 0.807</b>로 떨어졌다(단일 이동 기준 −2.2%).", BODY))
+        "검정은 드리프트를 주입한 chol만 플래그했다. 그러나 balanced accuracy는 "
+        f"<b>{monitoring['original_balanced_accuracy']:.3f} → "
+        f"{monitoring['drifted_balanced_accuracy']:.3f}</b>로, 이 시뮬레이션에서는 즉각적인 성능 저하가 "
+        "관찰되지 않았다. 따라서 분포 드리프트 탐지와 성능 저하를 동일시하지 않고, 실제 라벨 기반 "
+        "성능 모니터링을 별도로 유지해야 한다.", BODY))
     s += fig("fig_drift_monitoring.png", 13.5,
              "그림 3. 합성 타임스탬프 기반 드리프트 모니터링 — chol 평균이 점증할수록 "
-             "balanced accuracy 하락(상단), KS p-value 급락(하단, 로그 스케일).")
+             "KS p-value는 급락하지만 balanced accuracy는 단조 하락하지 않음.")
     s.append(P("<b>재학습 / 피드백 전략</b>", H2))
     s.append(P("• <b>트리거 기반 재학습</b>: 핵심 특성의 KS p&lt;0.05가 일정 기간 지속되거나, "
                "라벨 확보 후 balanced accuracy가 임계치 이하로 떨어지면 재학습을 트리거한다.", BULLET))
@@ -291,8 +299,8 @@ def build():
     # ── 7. 서빙 ──
     s.append(P("7. 서빙 선택: Model-as-a-Service", H1))
     s.append(P(
-        "본 시스템은 <b>Model-as-a-Service(MaaS)</b>를 선택한다. 병원 EMR이 환자 임상값을 "
-        "중앙 추론 API로 전송하면 위험 점수를 반환하는 구조다.", BODY))
+        "운영 확장안으로 <b>Model-as-a-Service(MaaS)</b>를 선택한다. 현재 저장소 구현은 입력 검증이 "
+        "포함된 CSV 배치 추론 CLI이며, 병원 EMR 연동 중앙 API는 다음 배포 단계의 목표 구조다.", BODY))
     serve_tbl = [
         ["기준", "MaaS 선택 근거"],
         ["지연 시간", "심장병 선별은 실시간(ms) 요구가 아닌 진료 중 수초 내 응답으로 충분 → 서버 추론 적합"],
@@ -330,9 +338,9 @@ def build():
     # ── 부록: AI 사용 공개 ──
     s.append(P("부록 A. AI 도구 사용 공개", H1))
     s.append(P(
-        "본 프로젝트에서 AI 코딩 도우미(Claude)를 <b>보일러플레이트 작성과 디버깅 보조</b> 용도로 "
-        "사용했다. 구체적으로는 sklearn Pipeline·MLflow·unittest·Dockerfile의 표준 구조 초안 작성, "
-        "reportlab 보고서 레이아웃, pandas 버전 호환 오류 디버깅에 활용했다. "
+        "본 프로젝트에서 AI 코딩 도우미(Claude, OpenAI Codex)를 <b>보일러플레이트 작성과 디버깅 보조</b> "
+        "용도로 사용했다. 구체적으로는 sklearn Pipeline·MLflow·unittest·Dockerfile의 표준 구조 초안 작성, "
+        "데이터 누수 점검, 입력 검증, reportlab 보고서 레이아웃과 버전 호환 오류 디버깅에 활용했다. "
         "데이터 전처리·모델 선택·지표 해석·드리프트 전략 등 모든 핵심 의사결정과 결과 해석은 "
         "직접 검토·검증했으며, 제출한 모든 코드와 결과에 대해 본인이 책임진다.", BODY))
 

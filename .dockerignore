@@ -1,0 +1,14 @@
+.git
+.github
+.venv
+__pycache__
+*.pyc
+*.ipynb
+*.pdf
+*.db
+logs
+mlruns
+costs
+docs
+notebooks
+tests

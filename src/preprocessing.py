@@ -42,22 +42,54 @@ def build_preprocessor() -> ColumnTransformer:
 FEATURE_RANGES: dict[str, tuple[float, float]] = {
     "age":      (1,   120),
     "trestbps": (60,  300),
-    "chol":     (0,   600),
+    "chol":     (1,   600),
     "thalach":  (50,  250),
     "oldpeak":  (-5,  10),
 }
 
+CATEGORICAL_VALUES: dict[str, set[float]] = {
+    "sex": {0, 1},
+    "cp": {1, 2, 3, 4},
+    "fbs": {0, 1},
+    "restecg": {0, 1, 2},
+    "exang": {0, 1},
+    "slope": {1, 2, 3},
+    "ca": {0, 1, 2, 3},
+    "thal": {3, 6, 7},
+}
+
 
 def validate_input(df: pd.DataFrame) -> list[str]:
-    """임상 범위를 벗어난 특성 목록 반환. 빈 리스트 = 정상."""
+    """필수 컬럼, 숫자 형식, 임상 범위와 범주값을 검증한다."""
     errors = []
+    required = NUMERIC_FEATURES + CATEGORICAL_FEATURES
+    missing = [col for col in required if col not in df.columns]
+    if missing:
+        errors.append(f"필수 컬럼 누락: {missing}")
+
     for col, (lo, hi) in FEATURE_RANGES.items():
         if col not in df.columns:
             continue
-        mask = (df[col] < lo) | (df[col] > hi)
+        values = pd.to_numeric(df[col], errors="coerce")
+        invalid_type = df[col].notna() & values.isna()
+        if invalid_type.any():
+            errors.append(f"{col}: 숫자가 아닌 값 {int(invalid_type.sum())}개")
+        mask = values.notna() & ((values < lo) | (values > hi))
         n = int(mask.sum())
         if n > 0:
             errors.append(f"{col}: {n}행이 [{lo}, {hi}] 범위 초과")
+
+    for col, allowed in CATEGORICAL_VALUES.items():
+        if col not in df.columns:
+            continue
+        values = pd.to_numeric(df[col], errors="coerce")
+        invalid_type = df[col].notna() & values.isna()
+        if invalid_type.any():
+            errors.append(f"{col}: 숫자가 아닌 값 {int(invalid_type.sum())}개")
+        invalid_value = values.notna() & ~values.isin(allowed)
+        if invalid_value.any():
+            bad = sorted(values[invalid_value].unique().tolist())
+            errors.append(f"{col}: 허용되지 않은 값 {bad}")
     return errors
 
 
